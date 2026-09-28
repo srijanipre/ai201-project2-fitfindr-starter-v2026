@@ -24,10 +24,7 @@ data earns credit; *"80% seemed reasonable"* does not.
 Given a query that matches at least one listing, the agent completes all three
 tool calls and returns a fit card — in at least 4 of 5 tries.
 
-**Why this target:**
-<!-- Why 4 of 5 and not 5 of 5? Something about your search, probably —
-     "my search is a plain keyword match and some phrasings will miss" is a
-     real answer. -->
+**Why this target:** My search is doing a keyword match, so some phrasings of the same thing will definitely miss (like asking for "vintage band tee" when I only look for exact words in the description). 4 of 5 feels realistic for that kind of matching.
 
 ---
 
@@ -36,65 +33,31 @@ tool calls and returns a fit card — in at least 4 of 5 tries.
 Given a query that matches no listings, the agent stops before calling
 `suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
 
-**Why this target:**
-<!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
-     about this path? -->
+**Why this target:** This one's deterministic — if the search returns an empty list, the branch just checks and stops. There's no randomness here, so it should work every time. The model isn't involved, just my branching logic.
 
 ---
 
-## 3. Something about state
+## 3. Session state stays correct
 
-<!-- YOU WRITE THIS ONE.
+When search_listings finds results, the selected_item in the session (the first result from the search) has the same title, price, and platform as the item that actually reaches suggest_outfit. Check this 5 of 5 tries.
 
-     How would you know that the item your search found is the same item the
-     next tool received? Name something countable or observable.
-
-     This is the criterion people find hardest, because state failure doesn't
-     look like state failure — it looks like a tool problem. Something that
-     compares session["selected_item"] against what actually reached
-     suggest_outfit is the shape you're after. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** If I pass data through the session correctly, there's no randomness or matching involved — it's just moving the same dict from one place to another. As long as I'm reading and writing correctly, this should be 100% reliable.
 
 ---
 
-## 4. Something about the fit card
+## 4. Fit card varies but stays in bounds
 
-<!-- YOU WRITE THIS ONE.
+For the same item and outfit suggestion, run create_fit_card three separate times and get three captions with different opening sentences. Also, all captions must be 2-4 sentences, mention the price exactly once, and mention the platform exactly once. Check this 5 of 5 tries.
 
-     The fit card calls a model, so the same input can produce different words
-     each time. That's not a bug — it's the nature of the tool. So what would
-     make it acceptable?
-
-     Think about what you'd actually be unhappy to see. A caption that never
-     mentions the price? Two different items producing the same opening
-     sentence? A card longer than a caption anyone would post? Any of those can
-     be turned into a number. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** The model has temperature > 0, so it should always vary. But the structural stuff (sentence count, mentioning required fields) should be consistent — the prompt should be clear enough for that. That's 5 of 5.
 
 ---
 
-## 5. Your choice
+## 5. Search respects the price ceiling
 
-<!-- YOU WRITE THIS ONE TOO.
+When given a max_price filter, search_listings returns zero results with a price above that ceiling. Test with different price ranges. Pass this 5 of 5 tries.
 
-     Pick something you actually care about getting right. Speed, the empty
-     wardrobe path, what happens when the model can't be reached, whether the
-     search respects a price ceiling — anything, as long as it names a number
-     or an observable outcome. -->
-
-
-
-**Why this target:**
+**Why this target:** Price filtering is just a number comparison, no AI involved. If I implement it, it should be bulletproof every time. This matters because someone actually trusts the budget they set.
 
 
 

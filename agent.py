@@ -107,8 +107,45 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     """
     session = new_session(query, wardrobe)
 
-    # TODO: delete these two lines and build the loop.
-    session["error"] = "The planning loop isn't built yet — see the TODO in agent.py."
+    count = 0
+    trace.check_iterations(count)
+
+    query_lower = query.lower()
+    parsed = {"description": query_lower, "size": None, "max_price": None}
+
+    words = query_lower.split()
+    for i, word in enumerate(words):
+        if word == "size" and i + 1 < len(words):
+            parsed["size"] = words[i + 1]
+        elif word == "under" or word == "under:" or word == "$":
+            if i + 1 < len(words):
+                try:
+                    price_str = words[i + 1].replace("$", "").strip()
+                    parsed["max_price"] = float(price_str)
+                except (ValueError, IndexError):
+                    pass
+
+    session["parsed"] = parsed
+
+    results = search_listings(
+        parsed["description"],  # TODO: parsing is basic, "tee for under $40" might not catch the price
+        size=parsed["size"],
+        max_price=parsed["max_price"]
+    )
+    session["search_results"] = results
+
+    if not results:
+        session["error"] = "Couldn't find anything matching that. Try a different search or higher budget."
+        return session
+
+    session["selected_item"] = results[0]
+
+    outfit = suggest_outfit(session["selected_item"], session["wardrobe"])
+    session["outfit_suggestion"] = outfit
+
+    card = create_fit_card(session["outfit_suggestion"], session["selected_item"])
+    session["fit_card"] = card
+
     return session
 
 
