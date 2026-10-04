@@ -15,8 +15,9 @@ Build and test your three tools in `tools.py` first. Then come here.
 
 import config
 import trace
-from tools import search_listings, suggest_outfit, create_fit_card
+from tools import suggest_outfit, create_fit_card
 from generate import ModelUnavailable
+from mcp_client import call_tool
 
 
 # ── session state ─────────────────────────────────────────────────────────────
@@ -106,45 +107,67 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         than a stack trace. The import is already at the top of this file.
     """
     session = new_session(query, wardrobe)
+    trace.start_trace()
 
-    count = 0
-    trace.check_iterations(count)
+    try:
+        count = 0
+        trace.check_iterations(count)
 
-    query_lower = query.lower()
-    parsed = {"description": query_lower, "size": None, "max_price": None}
+        query_lower = query.lower()
+        parsed = {"description": query_lower, "size": None, "max_price": None}
 
-    words = query_lower.split()
-    for i, word in enumerate(words):
-        if word == "size" and i + 1 < len(words):
-            parsed["size"] = words[i + 1]
-        elif word == "under" or word == "under:" or word == "$":
-            if i + 1 < len(words):
-                try:
-                    price_str = words[i + 1].replace("$", "").strip()
-                    parsed["max_price"] = float(price_str)
-                except (ValueError, IndexError):
-                    pass
+        words = query_lower.split()
+        for i, word in enumerate(words):
+            if word == "size" and i + 1 < len(words):
+                parsed["size"] = words[i + 1]
+            elif word == "under" or word == "under:" or word == "$":
+                if i + 1 < len(words):
+                    try:
+                        price_str = words[i + 1].replace("$", "").strip()
+                        parsed["max_price"] = float(price_str)
+                    except (ValueError, IndexError):
+                        pass
 
-    session["parsed"] = parsed
+        session["parsed"] = parsed
+        trace.step("parse_query", inputs={"query": query}, returned=parsed)
 
-    results = search_listings(
-        parsed["description"],  # TODO: parsing is basic, "tee for under $40" might not catch the price
-        size=parsed["size"],
-        max_price=parsed["max_price"]
-    )
-    session["search_results"] = results
+        results = call_tool("search_listings", {
+            "description": parsed["description"],
+            "size": parsed["size"],
+            "max_price": parsed["max_price"],
+        })
+        session["search_results"] = results
+        trace.step("search_listings (via MCP)", inputs={
+            "description": parsed["description"],
+            "size": parsed["size"],
+            "max_price": parsed["max_price"],
+        }, returned=results)
 
-    if not results:
-        session["error"] = "Couldn't find anything matching that. Try a different search or higher budget."
-        return session
+        if not results:
+            session["error"] = "Couldn't find anything matching that. Try a different search or higher budget."
+            trace.step("branch", note="search returned empty, stopping")
+            return session
 
-    session["selected_item"] = results[0]
+        session["selected_item"] = results[0]
+        trace.step("select_item", inputs=results, returned=session["selected_item"])
 
-    outfit = suggest_outfit(session["selected_item"], session["wardrobe"])
-    session["outfit_suggestion"] = outfit
+        outfit = suggest_outfit(session["selected_item"], session["wardrobe"])
+        session["outfit_suggestion"] = outfit
+        trace.step("suggest_outfit", inputs={
+            "new_item": session["selected_item"].get("title"),
+            "wardrobe_size": len(session["wardrobe"].get("items", [])),
+        }, returned=outfit[:100] + "…" if len(outfit) > 100 else outfit)
 
-    card = create_fit_card(session["outfit_suggestion"], session["selected_item"])
-    session["fit_card"] = card
+        card = create_fit_card(session["outfit_suggestion"], session["selected_item"])
+        session["fit_card"] = card
+        trace.step("create_fit_card", inputs={
+            "outfit_length": len(outfit),
+            "item": session["selected_item"].get("title"),
+        }, returned=card)
+
+    except ModelUnavailable as e:
+        session["error"] = f"The model couldn't be reached. Check your API key in .env, or create a fresh key at the API provider's website."
+        trace.step("model_unavailable", note="caught exception, returning error message")
 
     return session
 
