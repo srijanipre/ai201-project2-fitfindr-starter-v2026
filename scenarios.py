@@ -15,35 +15,41 @@ own criteria need — these are a starting point, not a fixed set.
 
 SCENARIOS = [
     {
-        # A query the data can match. Criterion 1.
+        # Criterion 1: A query the data can match should complete all three tools
+        # and return a fit card without stopping early.
         "name": "matching query completes",
         "query": "vintage graphic tee under $30",
         "wardrobe": "example",
         "criterion": 1,
     },
     {
-        # A query nothing can match. Criterion 2 — the branch.
+        # Criterion 2: A query that matches nothing should stop before calling
+        # suggest_outfit, returning only an error message. Tests the branch logic.
         "name": "impossible query stops early",
         "query": "designer ballgown size XXS under $5",
         "wardrobe": "example",
         "criterion": 2,
     },
     {
-        # Session state: selected_item matches what was searched. Criterion 3.
+        # Criterion 3: The item selected from search results should be stored in
+        # the session and passed to suggest_outfit unchanged. Verifies data flow.
         "name": "session state - search matches selected",
         "query": "denim jacket under $50",
         "wardrobe": "example",
         "criterion": 3,
     },
     {
-        # Fit card varies: run same item 3 separate times. Criterion 4.
+        # Criterion 4: Running the same query multiple times should produce
+        # different fit cards with varying opening sentences, but all must be
+        # 2-4 sentences and mention price and platform exactly once each.
         "name": "fit card variance - same item",
         "query": "silk slip dress under $40",
         "wardrobe": "example",
         "criterion": 4,
     },
     {
-        # Price filter: test that results respect max_price. Criterion 5.
+        # Criterion 5: When search is given a max_price filter, all returned
+        # items must be at or below that price. Tests the price ceiling logic.
         "name": "price ceiling filter",
         "query": "vintage under $25",
         "wardrobe": "example",
