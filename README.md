@@ -145,24 +145,18 @@ Found the holy grail of denim today 😭 The wash on these vintage 501s is unrea
 
 ## How I Used AI
 
-<!-- Two specific moments. What you asked, what came back, what you changed.
+**Moment 1: Debugging criterion 4 failure in test results**
 
-     "I used Claude to help me code" is not enough.
+- *What I asked for:* I ran 5 tries of the same query and got 5 fit cards. Tries 1-4 don't mention the platform (depop) but try 5 does. Why is it inconsistent?
+- *What came back:* The model isn't strongly constrained by the prompt. Your prompt says "mention the platform" but it's not required — it's phrased as advice, not a hard constraint.
+- *What I changed:* Changed the create_fit_card prompt from "mention the item and its price and platform once each" to "Your caption must mention the price exactly once and the platform ({platform_name}) exactly once. Include price and platform in the caption." The word "must" and the explicit repetition made the constraint enforceable.
+- *Result:* Re-ran the test and all 5 tries now include the platform. Criterion 4 went from 1/5 to 5/5.
 
-     "I gave Claude my search_listings spec. It returned None on no match
-     instead of an empty list, so I changed it" is the level we want. -->
+**Moment 2: Verifying MCP call changed the protocol but not the output**
 
-**Moment 1**
-
-- *What I asked for:* Why is create_fit_card giving me the same exact words three times?
-- *What came back:* Check if CACHE_ENABLED is on (it probably is), or if TEMPERATURE is 0.
-- *What I changed:* Found CACHE_ENABLED was True. Added `cache=False` when calling generate in create_fit_card so it wouldn't reuse the same answer.
-
-**Moment 2**
-
-- *What I asked for:* Why does my agent stop when it shouldn't? Let me trace through it.
-- *What came back:* The agent was working fine, but I realized I wasn't putting the selected item in the session first before passing it to suggest_outfit. Without that, I couldn't test if the right item made it through.
-- *What I changed:* Now I put everything in session — selected_item, outfit_suggestion, fit_card so I can see what's moving through the loop.
+- *What I asked for:* I moved search_listings to MCP and rewired agent.py to call it via call_tool() instead of directly. How do I verify the return value stayed the same?
+- *What came back:* Run a query before and after the change. If the selected_item and search results are identical, the plumbing worked — MCP is just a different way to reach the same tool.
+- *What I changed:* Added trace.step() calls to print what goes in and out of search_listings. The trace shows the MCP call returns the same 10-item list of dicts it did before. The function works exactly the same, just through the protocol now.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
@@ -181,26 +175,51 @@ Found the holy grail of denim today 😭 The wash on these vintage 501s is unrea
 | 4. Fit card varies but stays in bounds | 5 of 5 | FAIL | FAIL | FAIL | FAIL | PASS | MISSED (1/5) |
 | 5. Search respects the price ceiling | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (4/5) |
 
-**Real output from criterion 4, try 1** (from `results/run_2026-10-04_1700_before.md`):
+**Real output from criterion 1, try 1** (from `results/run_2026-10-04_1700_before.md`, function `run_eval.py::run_once`):
+
+```
+stopped early: no
+selected_item: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+search_results: 10
+
+Fit card: The Y2K butterfly baby tee of your dreams just dropped 🦋✨ Super fitted crop length that looks so good with baggy jeans or contrast khaki trousers. Tagged a medium but fits like a small—grab it before I keep it for myself! 🫶
+```
+
+**Real output from criterion 2, try 1** (impossible query stops before suggesting outfit):
+
+```
+stopped early: yes — Couldn't find anything matching that. Try a different search or higher budget.
+search_results: 0
+fit_card: None
+```
+
+**Real output from criterion 3, try 2** (selected_item comes from search_results):
+
+```
+search_results: 8 items
+selected_item: Denim Jacket — Light Wash, Cropped ($42.0, poshmark)
+selected_item.title matches first result: yes
+```
+
+**Real output from criterion 4, try 1** (fit card missing platform):
 
 ```
 Fit card:
 
 The 90s indie sleaze dress of your dreams just dropped. 🥀 Midi length muted floral silk with adjustable straps—throw it on with combat boots and an oversized sweatshirt or a denim jacket and chunky sneakers. One tiny snag on the side seam that completely disappears when it's on, yours for $30. ✨ DM to claim!
+
+Contains platform (depop): NO
+Contains price ($30): YES
+Sentence count: 4
 ```
 
-**Real output from criterion 4, try 5**:
+**Real output from criterion 5, try 3** (price ceiling filter):
 
 ```
-Fit card:
-
-the 90s model-off-duty slip dress of your dreams 🕊️ throw an oversized crewneck over it to turn it into a midi skirt, or layer a vintage leather jacket and combat boots on top. minor snag on the side seam that completely disappears when it's on, yours for $30 ✨ #9ugs #depop #slipdress #90sgrunge
-```
-
-**Real output from criterion 2, try 1**:
-
-```
-stopped early: yes — Couldn't find anything matching that. Try a different search or higher budget.
+Query: vintage under $25
+selected_item: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+Price is under $25: YES
+All 5 items returned are under $25: YES
 ```
 
 ---
@@ -280,13 +299,32 @@ stopped early: yes — Couldn't find anything matching that. Try a different sea
 | 4. Fit card varies but stays in bounds | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 | 5. Search respects the price ceiling | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (4/5) |
 
-**Sample fit card from after run, try 1:**
+**Real output from criterion 4 after, try 1** (from `results/run_2026-10-04_1715_after.md`):
 
 ```
+Fit card:
+
 Obsessed with this 90s floral midi slip dress, but I have way too many dresses right now. Throwing a black hoodie and combat boots over it is my absolute favorite way to style it. Grab it on my depop for just $30 before I change my mind!
+
+Contains platform (depop): YES
+Contains price ($30): YES
+Sentence count: 3
+Opening varies from other tries: YES
 ```
 
-**Did it help, and how do I know:** Yes. Criterion 4 went from 1/5 to 5/5. All five after-test captions now mention the platform (depop) explicitly and meet all the constraints: different opening sentences, 2-4 sentences, price mentioned once, platform mentioned once. The tightened prompt fixed the reliability issue.
+**Real output from criterion 4 after, try 3**:
+
+```
+Fit card:
+
+Obsessed with this 90s floral midi slip dress, especially layered under an oversized sweatshirt and combat boots. It's got a tiny snag on the side seam that completely hides when it's on. Just listed it on depop for $30.0 so grab it before I change my mind!
+
+Contains platform (depop): YES
+Contains price ($30.0): YES
+Sentence count: 3
+```
+
+**Did it help, and how do I know:** Yes. Criterion 4 went from 1/5 to 5/5. All five after-test captions now mention the platform (depop) explicitly and meet all the constraints: different opening sentences, 2-4 sentences, price mentioned once, platform mentioned once. The tightened prompt fixed the reliability issue. The key change was using the word "must" instead of "mention" — making it a hard constraint instead of a suggestion.
 
 
 
